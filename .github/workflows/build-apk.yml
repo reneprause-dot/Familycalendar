@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,6 +33,7 @@ jobs:
         run: |
           mkdir -p www
           cp index.html app.js logic.js style.css www/
+          echo "{\"build\": ${{ github.run_number }}, \"repo\": \"${{ github.repository }}\"}" > www/version.json
 
       - name: Android-Projekt erzeugen
         run: npx cap add android
@@ -51,3 +55,13 @@ jobs:
         with:
           name: familienplaner-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Familienplaner.apk
+          gh release create "v${{ github.run_number }}" Familienplaner.apk \
+            --title "Familienplaner ${{ github.run_number }}" \
+            --notes "Automatisch gebaut. Datei Familienplaner.apk laden und installieren." \
+            --latest
