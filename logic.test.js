@@ -153,3 +153,8 @@ assert(chor.notes.includes('Bitte pünktlich'), 'gefaltete Zeile');
 assert(imp.find(e => e.title === 'Restmüll').allDay);
 
 console.log('Alle Logik-Tests bestanden');
+
+assert.strictEqual(FP.buildOf('v12'), 12);
+assert(isNaN(FP.buildOf('abc')));
+assert(FP.isNewer(11, 'v12') && !FP.isNewer(12, 'v12') && !FP.isNewer(13, 'v12') && !FP.isNewer('x', 'v12') && !FP.isNewer(5, 'foo'));
+console.log('update-vergleich ok');

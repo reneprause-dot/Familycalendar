@@ -431,6 +431,10 @@ function moreHTML() {
       ${S.photos.length ? `<div class="thumbs">${S.photos.map(n => `<div class="thumb"><img data-photo="${esc(n)}" alt=""><button data-a="delphoto" data-n="${esc(n)}" aria-label="Foto löschen">✕</button></div>`).join('')}</div>` : ''}
       <div class="btns"><button class="btn" data-a="addphotos">📷 Fotos hinzufügen (${S.photos.length}/${MAX_PHOTOS})</button></div>
       <div class="hint">Einschalten: Android-Einstellungen → Display → Bildschirmschoner → „Familienplaner“ wählen und „Beim Laden“ einstellen. Fotos werden verkleinert und nur in der App gespeichert.</div></div>
+    <h2>App-Version</h2><div class="card">
+      <div class="hint" style="margin:0" id="updMsg">${appVersion ? 'Installiert: Version ' + esc(appVersion.build) : 'Versionsnummer unbekannt.'}</div>
+      <div class="btns"><button class="btn" data-a="checkupdate">🔄 Nach Updates suchen</button></div>
+      <div class="hint">Ein Update wird im Browser heruntergeladen und über die bestehende App installiert. Deine Daten bleiben erhalten.</div></div>
     <h2>Daten</h2><div class="card">
       <div class="hint" style="margin:0">Alle Daten liegen im internen App-Speicher deines Geräts.</div>
       <div class="btns"><button class="btn" data-a="export">Sicherung</button><button class="btn" data-a="import">Wiederherstellen</button></div>
@@ -587,6 +591,28 @@ function importICS() {
 }
 
 /* ---------- Aktionen ---------- */
+/* ---------- Update-Suche (GitHub Releases) ---------- */
+let appVersion = null;
+async function loadVersion() {
+  try { const r = await fetch('version.json', { cache: 'no-store' }); if (r.ok) appVersion = await r.json(); } catch (e) { }
+}
+function updMsg(html) { const el = $('#updMsg'); if (el) el.innerHTML = html; }
+async function checkUpdate(silent) {
+  if (!appVersion || !appVersion.repo) { if (!silent) updMsg('Diese Version wurde ohne Update-Info gebaut.'); return; }
+  if (!silent) updMsg('Suche läuft …');
+  try {
+    const r = await fetch('https://api.github.com/repos/' + appVersion.repo + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (r.status === 404) { if (!silent) updMsg('Noch kein Release gefunden (Repository öffentlich?).'); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rel = await r.json();
+    if (FP.isNewer(appVersion.build, rel.tag_name)) {
+      const asset = (rel.assets || []).find(x => /\.apk$/i.test(x.name));
+      ui.update = { tag: rel.tag_name, url: asset ? asset.browser_download_url : rel.html_url };
+      updMsg('Neue Version ' + esc(FP.buildOf(rel.tag_name)) + ' verfügbar (installiert: ' + esc(appVersion.build) + ').<div class="btns"><button class="btn" data-a="installupdate">⬇️ Update herunterladen</button></div>');
+      if (silent) toast('Update verfügbar: Mehr → App-Version');
+    } else if (!silent) updMsg('Du hast die neueste Version (' + esc(appVersion.build) + ').');
+  } catch (e) { if (!silent) updMsg('Suche fehlgeschlagen. Ist das Gerät online?'); }
+}
 async function doExport() {
   const fs = plug('Filesystem');
   const name = `Familienplaner/sicherung-${today()}.json`;
@@ -739,6 +765,8 @@ document.addEventListener('click', async ev => {
     try { if (native && fs) await fs.deleteFile({ path: 'fotos/' + n, directory: 'DATA' }); } catch (e) { }
     S.photos = S.photos.filter(x => x !== n); delete thumbCache[n]; await save();
   }
+  else if (a === 'checkupdate') checkUpdate(false);
+  else if (a === 'installupdate') { if (ui.update) window.location.href = ui.update.url; }
   else if (a === 'export') doExport();
   else if (a === 'import') $('#importFile').click();
   else if (a === 'importics') importICS();
@@ -768,7 +796,9 @@ $('#sheet').addEventListener('click', ev => { if (ev.target.id === 'sheet') clos
 (async function init() {
   const saved = await load();
   S = saved ? migrate(saved) : defaultState();
+  await loadVersion();
   render();
   scheduleNotifications();
   fetchWeather(false);
+  checkUpdate(true);
 })();

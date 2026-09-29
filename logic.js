@@ -322,8 +322,13 @@
     return out;
   }
 
+  /** Tag wie "v12" -> 12; sonst NaN. */
+  function buildOf(tag) { const m = /(\d+)\s*$/.exec(String(tag == null ? '' : tag)); return m ? parseInt(m[1], 10) : NaN; }
+  /** true, wenn der Release-Tag neuer ist als die installierte Build-Nummer. */
+  function isNewer(installed, tag) { const a = Number(installed), b = buildOf(tag); return isFinite(a) && isFinite(b) && b > a; }
+
   const api = {
-    pad, ymd, parse, addDays, dayDiff, memberIds, birthdayEvents, withBirthdays, displayTitle, occursOn, eventsOn, buildNotifications,
+    buildOf, isNewer, pad, ymd, parse, addDays, dayDiff, memberIds, birthdayEvents, withBirthdays, displayTitle, occursOn, eventsOn, buildNotifications,
     placeCandidates, parseQuick, findConflicts, conflictReport, weekStart, choreOpen, choreVisible, starsThisWeek, WKEYS, splitList,
     planFor, subjectsFor, bringFor, daysUntil, birthdaysSoon, parseICS, REMIND_NONE, REMIND_EVE
   };
