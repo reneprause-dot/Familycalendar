@@ -4,7 +4,7 @@
   "private": true,
   "description": "Familienplaner – Kalender, Wetter, Erinnerungen (Android via Capacitor)",
   "scripts": {
-    "test": "node test/logic.test.js && node test/smoke.js"
+    "test": "node logic.test.js && node smoke.js"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
