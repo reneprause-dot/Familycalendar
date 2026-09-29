@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bildschirmschoner</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:#dfe2ff;overflow:hidden;
+  font:16px/1.4 ui-rounded,"Nunito","Quicksand","Segoe UI",Roboto,system-ui,sans-serif}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+#amb{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+#drift{transition:transform 4s ease-in-out;max-width:92vw}
+#clock{font-size:min(26vw,22vh);font-weight:800;letter-spacing:.02em;line-height:1;opacity:.85}
+#date{font-size:min(5vw,4vh);margin-top:.4em;opacity:.7}
+#wx{font-size:min(5.5vw,4.4vh);margin-top:.9em;opacity:.7}
+#next{margin-top:1.1em;font-size:min(4.6vw,3.8vh);opacity:.6;line-height:1.6}
+#cd,#note{margin-top:.7em;font-size:min(4.4vw,3.6vh);opacity:.6}
+#hint{margin-top:2em;font-size:min(3.4vw,2.8vh);opacity:.32}
+#photo{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 1.5s;z-index:3}
+#photo.on{opacity:1;pointer-events:auto}
+#pimg{width:100%;height:100%;object-fit:contain;display:block}
+#pclock{position:absolute;left:18px;bottom:14px;font-size:min(9vw,7vh);font-weight:800;color:#fff;text-shadow:0 2px 8px #000;opacity:.85}
+#panel{z-index:5;position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.6)}
+#panel.hidden{display:none}
+.sheet{width:100%;max-width:720px;max-height:94%;overflow-y:auto;border-radius:26px 26px 0 0;padding:16px;
+  background:var(--bg);color:var(--text)}
+.head{display:flex;align-items:center;justify-content:space-between;font-size:1.2rem;font-weight:800}
+.x{width:40px;height:40px;border-radius:50%;background:var(--card);font-size:1.1rem}
+.wdays{display:flex;gap:6px;margin:10px 0}
+.wd{flex:1;background:var(--card);border-radius:14px;padding:6px 2px;text-align:center;font-size:.78rem}
+.wd b{display:block}
+h3{margin:14px 2px 6px;font-size:1rem}
+.card{background:var(--card);border-radius:20px;padding:4px 14px}
+.it{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(128,128,128,.2)}
+.it:last-child{border-bottom:0}
+.av{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:50%;flex:none;font-size:1.1rem}
+.t{font-weight:700}.s{font-size:.82rem;opacity:.65}
+.empty{text-align:center;opacity:.6;padding:14px 0}
+.btns{display:flex;gap:10px;margin-top:14px}
+.btn{flex:1;padding:12px;border-radius:99px;background:var(--pri);color:var(--onpri);font-weight:800}
+.btn.alt{background:var(--card);color:var(--text)}
+</style>
+</head>
+<body>
+<div id="amb"><div id="drift">
+  <div id="clock">--:--</div><div id="date"></div><div id="wx"></div><div id="next"></div><div id="cd"></div><div id="note"></div>
+  <div id="hint">Tippen für den Familienplan</div>
+</div></div>
+<div id="photo"><img id="pimg" alt=""><div id="pclock"></div></div>
+<div id="panel" class="hidden"><div class="sheet" id="sheet">
+  <div class="head"><span id="ptitle">Familienplan</span><button class="x" id="pClose" aria-label="Schließen">✕</button></div>
+  <div id="pbody"></div>
+  <div class="btns"><button class="btn" id="pOpen">📱 App öffnen</button><button class="btn alt" id="pExit">🌙 Beenden</button></div>
+</div></div>
+<script src="logic.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const safeColor = c => (/^#[0-9a-f]{6}$/i.test(c) ? c : '#888888');
+  const inkOn = hex => { const n = parseInt(safeColor(hex).slice(1), 16); return ((0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255) > 0.6 ? '#2b2b2b' : '#fff'; };
+  const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  const DOWL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+  const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const THEMES = {
+    sun: { bg: '#FFF8EC', card: '#FFFFFF', text: '#3B2F2F', pri: '#FFB020', onpri: '#3B2F2F' },
+    sea: { bg: '#EEF8FB', card: '#FFFFFF', text: '#17323B', pri: '#29A5C9', onpri: '#06303D' },
+    meadow: { bg: '#F2FAEE', card: '#FFFFFF', text: '#1E3A20', pri: '#6CC04A', onpri: '#12331A' },
+    berry: { bg: '#FFF1F5', card: '#FFFFFF', text: '#43182E', pri: '#F472A6', onpri: '#43112A' },
+    night: { bg: '#1A1C36', card: '#25284A', text: '#F1F2FF', pri: '#8B93FF', onpri: '#14163A' }
+  };
+  const WMO = c => c === 0 ? '☀️' : c <= 2 ? '🌤️' : c === 3 ? '☁️' : c <= 48 ? '🌫️' : c <= 57 ? '🌦️' : c <= 67 ? '🌧️' : c <= 77 ? '❄️' : c <= 82 ? '🌧️' : c <= 86 ? '🌨️' : '⛈️';
+
+  let S = null, hideTimer = null;
+
+  /* Daten: Android-Brücke (interner App-Speicher), im Browser zum Testen localStorage */
+  function readData() {
+    let raw = '';
+    try { if (window.Android && window.Android.readData) raw = window.Android.readData(); } catch (e) { }
+    if (!raw) { try { raw = localStorage.getItem('fp') || ''; } catch (e) { } }
+    try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function load() {
+    const d = readData() || {};
+    S = { members: d.members || [], events: d.events || [], tasks: d.tasks || [], settings: d.settings || {}, weather: d.weather || null, notes: d.notes || [], countdowns: d.countdowns || [] };
+    const th = THEMES[S.settings.theme] || THEMES.sun;
+    const st = $('sheet').style;
+    if (st && st.setProperty) Object.entries(th).forEach(([k, v]) => st.setProperty('--' + k, v));
+  }
+
+  const today = () => FP.ymd(new Date());
+  const rel = ds => {
+    if (ds === today()) return 'Heute';
+    if (ds === FP.ymd(FP.addDays(new Date(), 1))) return 'Morgen';
+    const d = FP.parse(ds); return `${DOWL[d.getDay()]}, ${d.getDate()}. ${MONTHS[d.getMonth()]}`;
+  };
+  const allEvents = () => FP.withBirthdays(S.events, S.members);
+  const memberById = id => S.members.find(m => m.id === id);
+  const timeOf = ev => (ev.allDay || ev.virtual ? 'ganztägig' : ev.time || '');
+  const titlesOn = () => S.settings.dreamTitles !== false;
+
+  /* nächste Einträge ab jetzt */
+  function upcoming(limit, days) {
+    const out = [], now = new Date(), nowHM = FP.pad(now.getHours()) + ':' + FP.pad(now.getMinutes());
+    const evAll = allEvents();
+    for (let i = 0; i < days && out.length < limit; i++) {
+      const ds = FP.ymd(FP.addDays(now, i));
+      for (const ev of FP.eventsOn(evAll, ds)) {
+        if (i === 0 && !ev.allDay && !ev.virtual && ev.time && ev.time < nowHM) continue;
+        out.push({ ev, ds });
+        if (out.length >= limit) break;
+      }
+    }
+    return out;
+  }
+
+  function cdText(c, d) {
+    return d === 0 ? `${c.emoji || '🎉'} Heute: ${c.title}!` : d === 1 ? `${c.emoji || '🎉'} Morgen: ${c.title}` : `${c.emoji || '🎉'} Noch ${d} Tage bis ${c.title}`;
+  }
+  function upcomingCountdowns() {
+    return S.countdowns.map(c => ({ c, d: FP.daysUntil(c.date) })).filter(x => x.d >= 0).sort((a, b) => a.d - b.d);
+  }
+
+  /* ---------- Ruhige Anzeige ---------- */
+  function renderAmbient() {
+    if (!S) return;
+    const now = new Date();
+    $('clock').textContent = FP.pad(now.getHours()) + ':' + FP.pad(now.getMinutes());
+    $('pclock').textContent = $('clock').textContent;
+    $('date').textContent = `${DOWL[now.getDay()]}, ${now.getDate()}. ${MONTHS[now.getMonth()]}`;
+    const w = S.weather;
+    $('wx').textContent = w && w.cur ? `${WMO(w.cur.weather_code)} ${Math.round(w.cur.temperature_2m)}°C · ${w.place}` : '';
+    const cds = titlesOn() ? upcomingCountdowns() : [], lastNote = titlesOn() && S.notes.length ? S.notes[S.notes.length - 1] : null;
+    $('cd').textContent = cds.length ? cdText(cds[0].c, cds[0].d) : '';
+    $('note').textContent = lastNote ? '📌 ' + lastNote.text : '';
+    if (titlesOn()) {
+      const nx = upcoming(2, 14);
+      $('next').innerHTML = nx.length
+        ? nx.map(({ ev, ds }) => `${rel(ds)} ${esc(timeOf(ev))} · ${esc(FP.displayTitle(ev, ds))}`).join('<br>')
+        : 'Keine Termine in den nächsten Tagen 🎉';
+    } else {
+      const n = FP.eventsOn(allEvents(), today()).length + S.tasks.filter(t => t.due === today() && !t.done).length;
+      $('next').textContent = n ? `📅 ${n} Einträge heute` : '';
+    }
+  }
+  function drift() {
+    const dx = Math.round((Math.random() - 0.5) * 60), dy = Math.round((Math.random() - 0.5) * 80);
+    if ($('drift').style) $('drift').style.transform = `translate(${dx}px,${dy}px)`;
+  }
+
+  /* ---------- Familienplan (nach Tippen) ---------- */
+  function avatars(ev) {
+    return FP.memberIds(ev).map(memberById).filter(Boolean)
+      .map(m => `<span class="av" style="background:${safeColor(m.color)};color:${inkOn(m.color)}">${esc(m.emoji || '🙂')}</span>`).join('');
+  }
+  function renderPanel() {
+    const w = S.weather;
+    let html = '';
+    if (w && w.daily) {
+      html += '<div class="wdays">' + w.daily.time.slice(0, 4).map((t, k) => {
+        const d = FP.parse(t);
+        return `<div class="wd"><b>${k === 0 ? 'Heute' : DOW[(d.getDay() + 6) % 7]}</b>${WMO(w.daily.weather_code[k])}<br>${Math.round(w.daily.temperature_2m_max[k])}° / ${Math.round(w.daily.temperature_2m_min[k])}°</div>`;
+      }).join('') + '</div>';
+    }
+    if (titlesOn() && S.notes.length) html += '<h3>📌 Pinnwand</h3><div class="card">' + S.notes.slice(-3).reverse().map(n => `<div class="it"><div class="t">${esc(n.text)}</div></div>`).join('') + '</div>';
+    if (titlesOn() && upcomingCountdowns().length) html += '<h3>⏳ Countdown</h3><div class="card">' + upcomingCountdowns().slice(0, 3).map(x => `<div class="it"><div class="t">${esc(cdText(x.c, x.d))}</div></div>`).join('') + '</div>';
+    const now = new Date(), evAll = allEvents();
+    let shown = 0;
+    for (let i = 0; i < 8; i++) {
+      const ds = FP.ymd(FP.addDays(now, i));
+      const evs = FP.eventsOn(evAll, ds).filter(e => !(i === 0 && !e.allDay && !e.virtual && e.time && e.time < FP.pad(now.getHours()) + ':' + FP.pad(now.getMinutes())));
+      const tasks = S.tasks.filter(t => t.due === ds && !t.done);
+      if (!evs.length && !tasks.length) continue;
+      shown += evs.length + tasks.length;
+      html += `<h3>${esc(rel(ds))}</h3><div class="card">` +
+        evs.map(e => `<div class="it">${avatars(e)}<div><div class="t">${esc(FP.displayTitle(e, ds))}</div><div class="s">${esc(timeOf(e))}${e.notes ? ' · ' + esc(e.notes) : ''}</div></div></div>`).join('') +
+        tasks.map(t => { const m = memberById(t.member); return `<div class="it"><span class="av" style="background:${m ? safeColor(m.color) : '#999'}">${m ? esc(m.emoji || '🙂') : '✅'}</span><div><div class="t">${esc(t.text)}</div><div class="s">Aufgabe fällig</div></div></div>`; }).join('') +
+        '</div>';
+    }
+    if (!shown) html += '<div class="card"><div class="empty">Die nächsten Tage sind frei 🎉</div></div>';
+    $('ptitle').textContent = (S.settings.familyName ? S.settings.familyName : 'Familienplan') + ' · ' + rel(today());
+    $('pbody').innerHTML = html;
+  }
+  function armHide() { clearTimeout(hideTimer); hideTimer = setTimeout(hidePanel, 30000); }
+  function showPanel() { load(); renderPanel(); $('panel').classList.remove('hidden'); armHide(); }
+  function hidePanel() { clearTimeout(hideTimer); $('panel').classList.add('hidden'); renderAmbient(); }
+
+  /* ---------- Fotos: Uhr und Diashow wechseln sich ab ---------- */
+  let photos = [], pIdx = 0, phase = 'clock', fails = 0, cycleTimer = null;
+  function initPhotos() {
+    photos = []; fails = 0;
+    if (S.settings.dreamPhotos === false) return;
+    try { if (window.Android && window.Android.listPhotos) photos = JSON.parse(window.Android.listPhotos()) || []; } catch (e) { photos = []; }
+  }
+  function cycle() {
+    clearTimeout(cycleTimer);
+    if (!photos.length || !$('panel').classList.contains('hidden')) { cycleTimer = setTimeout(cycle, 15000); return; }
+    if (phase === 'clock') {
+      let url = '';
+      try { url = window.Android.readPhoto(photos[pIdx % photos.length]); } catch (e) { }
+      pIdx++;
+      if (url) { fails = 0; $('pimg').src = url; $('photo').classList.add('on'); phase = 'photo'; cycleTimer = setTimeout(cycle, 20000); return; }
+      if (++fails >= photos.length) { photos = []; }
+      cycleTimer = setTimeout(cycle, 500);
+      return;
+    }
+    $('photo').classList.remove('on'); phase = 'clock'; cycleTimer = setTimeout(cycle, 45000);
+  }
+
+  /* ---------- Wetter im Hintergrund auffrischen (nur Anzeige) ---------- */
+  async function refreshWeather() {
+    const w = S && S.weather;
+    if (!w || w.lat == null || Date.now() - w.ts < 60 * 60 * 1000) return;
+    try {
+      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}` +
+        `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=4`);
+      const j = await r.json();
+      if (j.current) { S.weather = { ts: Date.now(), place: w.place, lat: w.lat, lon: w.lon, cur: j.current, daily: j.daily }; renderAmbient(); }
+    } catch (e) { /* offline: Zwischenspeicher bleibt */ }
+  }
+
+  /* ---------- Start ---------- */
+  document.addEventListener('click', ev => {
+    const id = ev.target && ev.target.id;
+    if (id === 'pClose') return hidePanel();
+    if (id === 'pOpen') { try { window.Android && window.Android.openApp(); } catch (e) { } return; }
+    if (id === 'pExit') { try { window.Android && window.Android.exit(); } catch (e) { } return; }
+    if ($('panel').classList.contains('hidden')) showPanel(); else armHide();
+  });
+  load(); renderAmbient(); refreshWeather(); initPhotos(); cycleTimer = setTimeout(cycle, 20000);
+  setInterval(() => { renderAmbient(); }, 15000);
+  setInterval(drift, 60000);
+  setInterval(() => { if ($('panel').classList.contains('hidden')) { load(); initPhotos(); renderAmbient(); refreshWeather(); } }, 10 * 60000);
+  window.__dream = { renderAmbient, renderPanel, showPanel, hidePanel, load, cycle, initPhotos };
+})();
+</script>
+</body>
+</html>
