@@ -1,0 +1,8 @@
+{
+  "appId": "de.familienplaner.app",
+  "appName": "Familienplaner",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  }
+}
